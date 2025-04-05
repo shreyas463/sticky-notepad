@@ -14,7 +14,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>", "chrome://*/*", "chrome-extension://*/*"],
+      "matches": ["<all_urls>"],
       "js": ["content_scripts/content.js"],
       "css": ["content_scripts/content.css"],
       "run_at": "document_idle",
