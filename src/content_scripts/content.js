@@ -649,55 +649,92 @@ function saveNotes() {
 
 // Load note content
 function loadNoteContent() {
-  // Load all saved notes
-  chrome.storage.local.get(['notes', 'noteContent'], (result) => {
-    // Handle new multi-note format
-    if (result.notes && Array.isArray(result.notes) && result.notes.length > 0) {
-      // First, create the main notepad if it doesn't exist
-      if (!notepadContainer) {
-        const mainNote = result.notes.find(note => note.id === 'note-1');
-        if (mainNote) {
-          createNotepad('note-1', mainNote.position);
-          if (notepadTextarea && mainNote.content) {
-            notepadTextarea.value = mainNote.content;
+  try {
+    chrome.storage.local.get(['notes', 'notepadSettings', 'noteContent'], (result) => {
+      try {
+        if (chrome.runtime.lastError) {
+          console.error('Error loading notes from storage:', chrome.runtime.lastError);
+          // Create a default notepad even if we can't load from storage
+          if (notepads.length === 0) {
+            createNotepad('note-1');
           }
-          if (mainNote.isMinimized) {
-            notepadContainer.classList.add('sticky-notepad-minimized');
-            isMinimized = true;
-          }
-          if (mainNote.size) {
-            notepadContainer.style.width = mainNote.size.width;
-            notepadContainer.style.height = mainNote.size.height;
+          return;
+        }
+        
+        // Load settings
+        if (result.notepadSettings) {
+          currentSettings = { ...currentSettings, ...result.notepadSettings };
+        }
+        
+        // Check if we have saved notes
+        if (result.notes && Array.isArray(result.notes) && result.notes.length > 0) {
+          // We have multiple notes saved in the new format
+          result.notes.forEach(note => {
+            try {
+              // Check if this notepad already exists
+              const existingNotepad = notepads.find(n => n.id === note.id);
+              if (!existingNotepad) {
+                createNotepad(note.id, note.position);
+                const notepad = notepads.find(n => n.id === note.id);
+                if (notepad) {
+                  // Set content
+                  notepad.textarea.value = note.content || '';
+                  
+                  // Set size if available
+                  if (note.size) {
+                    notepad.container.style.width = note.size.width || '300px';
+                    notepad.container.style.height = note.size.height || '200px';
+                  }
+                  
+                  // Set minimized state if available
+                  if (note.isMinimized) {
+                    notepad.container.classList.add('sticky-notepad-minimized');
+                  }
+                }
+              }
+            } catch (noteError) {
+              console.error('Error creating notepad from saved data:', noteError);
+            }
+          });
+        } else if (result.noteContent) {
+          // Legacy format - single note
+          // Create the default notepad if it doesn't exist
+          const existingMainNotepad = notepads.find(n => n.id === 'note-1');
+          if (!existingMainNotepad) {
+            createNotepad('note-1');
+            const mainNotepad = notepads.find(n => n.id === 'note-1');
+            if (mainNotepad) {
+              mainNotepad.textarea.value = result.noteContent || '';
+            }
           }
         } else {
-          // If no main note found, create default
-          createNotepad();
+          // No saved notes, create a default one if none exist
+          if (notepads.length === 0) {
+            createNotepad('note-1');
+          }
+        }
+        
+        // Apply settings to all notepads
+        try {
+          applySettings();
+        } catch (settingsError) {
+          console.error('Error applying settings:', settingsError);
+        }
+      } catch (resultError) {
+        console.error('Error processing storage results:', resultError);
+        // Create a default notepad as fallback
+        if (notepads.length === 0) {
+          createNotepad('note-1');
         }
       }
-      
-      // Then create all additional notes
-      result.notes.forEach(note => {
-        if (note.id !== 'note-1') {
-          const { container, textarea } = createNotepad(note.id, note.position);
-          if (textarea && note.content) {
-            textarea.value = note.content;
-          }
-          if (note.isMinimized) {
-            container.classList.add('sticky-notepad-minimized');
-          }
-          if (note.size) {
-            container.style.width = note.size.width;
-            container.style.height = note.size.height;
-          }
-        }
-      });
-    } 
-    // Handle legacy single-note format
-    else if (result.noteContent) {
-      noteContent = result.noteContent;
-      if (notepadTextarea) notepadTextarea.value = noteContent;
+    });
+  } catch (storageError) {
+    console.error('Error accessing chrome.storage:', storageError);
+    // Create a default notepad as fallback
+    if (notepads.length === 0) {
+      createNotepad('note-1');
     }
-  });
+  }
 }
 
 // Save notepad position and size

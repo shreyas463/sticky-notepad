@@ -38,67 +38,71 @@ const storageManager = new StorageManager();
 
 // Initialize default settings when extension is installed
 chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    // Set default settings
-    const defaultSettings = {
-      visible: true,
-      opacity: 0.9,
-      fontSize: '14px',
-      theme: 'light',
-      storageType: 'local'
-    };
-    
-    storageManager.save({ notepadSettings: defaultSettings })
-      .then(() => {
-        console.log('Default settings initialized');
-      })
-      .catch((error) => {
-        console.error('Error initializing settings:', error);
-      });
+  try {
+    if (details && details.reason === 'install') {
+      // Set default settings
+      const defaultSettings = {
+        visible: true,
+        opacity: 0.9,
+        fontSize: '14px',
+        theme: 'light',
+        storageType: 'local'
+      };
+      
+      storageManager.save({ notepadSettings: defaultSettings })
+        .then(() => {
+          console.log('Default settings initialized');
+        })
+        .catch((error) => {
+          console.error('Error initializing settings:', error);
+        });
+    }
+  } catch (error) {
+    console.error('Error in onInstalled listener:', error);
   }
 });
 
 // Listen for messages from content scripts or popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'getSettings') {
-    storageManager.get('notepadSettings')
-      .then((result) => {
-        sendResponse({ settings: result.notepadSettings });
-      })
-      .catch((error) => {
-        console.error('Error getting settings:', error);
-        sendResponse({ error: error.message });
-      });
-    return true; // Keep the message channel open for async response
-  }
-  
-  if (message.action === 'changeStorageType') {
-    // We're only using local storage now, so just acknowledge the request
-    sendResponse({ success: true });
+  try {
+    if (message.action === 'getSettings') {
+      storageManager.get('notepadSettings')
+        .then((result) => {
+          sendResponse({ settings: result.notepadSettings });
+        })
+        .catch((error) => {
+          console.error('Error getting settings:', error);
+          sendResponse({ error: error.message });
+        });
+      return true; // Keep the message channel open for async response
+    }
+    
+    if (message.action === 'changeStorageType') {
+      // We're only using local storage now, so just acknowledge the request
+      sendResponse({ success: true });
+      return true;
+    }
+    
+    if (message.action === 'exportNotes') {
+      // Since we don't have exportNotes method, respond with an error
+      console.error('Export notes functionality not implemented');
+      sendResponse({ success: false, error: 'Export functionality not implemented' });
+      return true;
+    }
+    
+    if (message.action === 'importNotes') {
+      // Since we don't have importNotes method, respond with an error
+      console.error('Import notes functionality not implemented');
+      sendResponse({ success: false, error: 'Import functionality not implemented' });
+      return true;
+    }
+    
+    // Default response for unknown actions
+    sendResponse({ success: false, error: 'Unknown action' });
     return true;
-  }
-  
-  if (message.action === 'exportNotes') {
-    storageManager.exportNotes(message.format)
-      .then((filename) => {
-        sendResponse({ success: true, filename: filename });
-      })
-      .catch((error) => {
-        console.error('Error exporting notes:', error);
-        sendResponse({ error: error.message });
-      });
-    return true;
-  }
-  
-  if (message.action === 'importNotes') {
-    storageManager.importNotes(message.content, message.format)
-      .then((content) => {
-        sendResponse({ success: true, content: content });
-      })
-      .catch((error) => {
-        console.error('Error importing notes:', error);
-        sendResponse({ error: error.message });
-      });
+  } catch (error) {
+    console.error('Error in message handler:', error);
+    sendResponse({ success: false, error: error.message });
     return true;
   }
 });
