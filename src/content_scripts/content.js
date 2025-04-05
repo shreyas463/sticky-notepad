@@ -25,8 +25,12 @@ let notepadPosition = { top: '20px', right: '20px', left: 'auto', bottom: 'auto'
 let notepadSize = { width: '300px', height: '200px' };
 let autoSaveTimer = null;
 
-// Initialize when the content script is injected
-initializeNotepad();
+// Wait for DOM to be fully loaded before initializing
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeNotepad);
+} else {
+  initializeNotepad();
+}
 
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
