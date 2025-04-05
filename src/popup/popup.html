@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sticky Notepad</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <h1>Sticky Notepad</h1>
+    
+    <div class="controls">
+      <div class="toggle-section">
+        <label class="switch">
+          <input type="checkbox" id="notepad-toggle">
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Show Notepad</span>
+      </div>
+      
+      <div class="settings-section">
+        <h2>Settings</h2>
+        <div class="setting">
+          <label for="opacity">Opacity:</label>
+          <input type="range" id="opacity" min="0.3" max="1" step="0.1" value="0.9">
+        </div>
+        
+        <div class="setting">
+          <label for="font-size">Font Size:</label>
+          <select id="font-size">
+            <option value="12px">Small</option>
+            <option value="14px" selected>Medium</option>
+            <option value="16px">Large</option>
+          </select>
+        </div>
+        
+        <div class="setting">
+          <label for="theme">Theme:</label>
+          <select id="theme">
+            <option value="light" selected>Light</option>
+            <option value="dark">Dark</option>
+            <option value="yellow">Yellow</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="storage-section">
+        <h2>Storage</h2>
+        <div class="storage-option">
+          <input type="radio" id="local-storage" name="storage" value="local" checked>
+          <label for="local-storage">Local Storage</label>
+        </div>
+        
+        <div class="storage-option">
+          <input type="radio" id="sync-storage" name="storage" value="sync">
+          <label for="sync-storage">Sync Across Devices</label>
+        </div>
+        
+        <!-- Google Drive integration will be implemented in future version -->
+        <div class="storage-option disabled">
+          <input type="radio" id="drive-storage" name="storage" value="drive" disabled>
+          <label for="drive-storage">Google Drive (Coming Soon)</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="buttons">
+      <button id="save-settings">Save Settings</button>
+      <button id="reset-settings">Reset</button>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
