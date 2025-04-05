@@ -45,18 +45,23 @@ function initializeNotepad() {
 
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'updateSettings') {
-    updateNotepadSettings(message.settings);
-    sendResponse({ success: true });
-  } else if (message.action === 'toggleVisibility') {
-    toggleNotepadVisibility(message.visible);
-    sendResponse({ success: true });
-  } else if (message.action === 'initializeNotepad') {
-    // Reinitialize if needed (e.g., after navigation)
-    if (!notepadContainer || !document.body.contains(notepadContainer)) {
-      initializeNotepad();
+  try {
+    if (message.action === 'updateSettings') {
+      updateNotepadSettings(message.settings);
+      sendResponse({ success: true });
+    } else if (message.action === 'toggleVisibility') {
+      toggleNotepadVisibility(message.visible);
+      sendResponse({ success: true });
+    } else if (message.action === 'initializeNotepad') {
+      // Reinitialize if needed (e.g., after navigation)
+      if (!notepadContainer || !document.body.contains(notepadContainer)) {
+        initializeNotepad();
+      }
+      sendResponse({ success: true });
     }
-    sendResponse({ success: true });
+  } catch (error) {
+    console.error('Error handling message:', error);
+    sendResponse({ success: false, error: error.message });
   }
   return true; // Keep the message channel open for async response
 });
@@ -507,41 +512,81 @@ function toggleMinimize(e, noteId) {
 
 // Hide notepad
 function hideNotepad(e, noteId) {
-  console.log('Hiding notepad with ID:', noteId);
-  
-  // If it's the main notepad, update settings
-  if (noteId === 'note-1') {
-    currentSettings.visible = false;
+  try {
+    console.log('Hiding notepad with ID:', noteId);
     
-    // Apply settings to all notepads
-    applySettings();
-    
-    // Update settings in storage
-    chrome.storage.local.get('notepadSettings', (result) => {
-      const settings = result.notepadSettings || {};
-      settings.visible = false;
-      chrome.storage.local.set({ notepadSettings: settings });
-    });
-  } else {
-    // For additional notepads, just remove them from the DOM and the notepads array
-    const notepadIndex = notepads.findIndex(notepad => notepad.id === noteId);
-    console.log('Found notepad at index:', notepadIndex);
-    
-    if (notepadIndex !== -1) {
-      const notepadToRemove = notepads[notepadIndex];
-      // Remove from DOM
-      if (notepadToRemove.container && document.body.contains(notepadToRemove.container)) {
-        document.body.removeChild(notepadToRemove.container);
-        console.log('Removed notepad from DOM');
+    // If it's the main notepad, update settings
+    if (noteId === 'note-1') {
+      currentSettings.visible = false;
+      
+      // Apply settings to all notepads
+      try {
+        applySettings();
+      } catch (error) {
+        console.error('Error applying settings:', error);
       }
       
-      // Remove from array
-      notepads.splice(notepadIndex, 1);
-      console.log('Removed notepad from array, remaining notepads:', notepads.length);
-      
-      // Save notes to update storage
-      saveNotes();
+      // Update settings in storage
+      try {
+        chrome.storage.local.get('notepadSettings', (result) => {
+          if (chrome.runtime.lastError) {
+            console.error('Error getting notepad settings:', chrome.runtime.lastError);
+            return;
+          }
+          
+          const settings = result.notepadSettings || {};
+          settings.visible = false;
+          
+          chrome.storage.local.set({ notepadSettings: settings }, () => {
+            if (chrome.runtime.lastError) {
+              console.error('Error saving notepad settings:', chrome.runtime.lastError);
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Error accessing chrome storage:', error);
+      }
+    } else {
+      // For additional notepads, just remove them from the DOM and the notepads array
+      try {
+        const notepadIndex = notepads.findIndex(notepad => notepad.id === noteId);
+        console.log('Found notepad at index:', notepadIndex);
+        
+        if (notepadIndex !== -1) {
+          try {
+            const notepadToRemove = notepads[notepadIndex];
+            // Remove from DOM
+            if (notepadToRemove.container && document.body && document.body.contains(notepadToRemove.container)) {
+              document.body.removeChild(notepadToRemove.container);
+              console.log('Removed notepad from DOM');
+            } else {
+              console.log('Notepad container not found in DOM or already removed');
+            }
+          } catch (domError) {
+            console.error('Error removing notepad from DOM:', domError);
+          }
+          
+          // Remove from array
+          try {
+            notepads.splice(notepadIndex, 1);
+            console.log('Removed notepad from array, remaining notepads:', notepads.length);
+          } catch (arrayError) {
+            console.error('Error removing notepad from array:', arrayError);
+          }
+          
+          // Save notes to update storage
+          try {
+            saveNotes();
+          } catch (saveError) {
+            console.error('Error saving notes after removal:', saveError);
+          }
+        }
+      } catch (findError) {
+        console.error('Error finding notepad in array:', findError);
+      }
     }
+  } catch (error) {
+    console.error('Unhandled error in hideNotepad function:', error);
   }
 }
 
@@ -552,30 +597,54 @@ function saveNoteContent() {
 
 // Save all notes
 function saveNotes() {
-  if (notepads.length === 0) return;
-  
-  const notesToSave = notepads.map(notepad => {
-    const rect = notepad.container.getBoundingClientRect();
-    return {
-      id: notepad.id,
-      content: notepad.textarea.value,
-      position: {
-        top: notepad.container.style.top,
-        right: notepad.container.style.right,
-        left: notepad.container.style.left,
-        bottom: notepad.container.style.bottom
-      },
-      size: {
-        width: notepad.container.style.width || rect.width + 'px',
-        height: notepad.container.style.height || rect.height + 'px'
-      },
-      isMinimized: notepad.container.classList.contains('sticky-notepad-minimized')
-    };
-  });
-  
-  chrome.storage.local.set({ notes: notesToSave }, () => {
-    console.log('All notes saved');
-  });
+  try {
+    if (notepads.length === 0) return;
+    
+    const notesToSave = notepads.map(notepad => {
+      try {
+        const rect = notepad.container.getBoundingClientRect();
+        return {
+          id: notepad.id,
+          content: notepad.textarea.value,
+          position: {
+            top: notepad.container.style.top,
+            right: notepad.container.style.right,
+            left: notepad.container.style.left,
+            bottom: notepad.container.style.bottom
+          },
+          size: {
+            width: notepad.container.style.width || rect.width + 'px',
+            height: notepad.container.style.height || rect.height + 'px'
+          },
+          isMinimized: notepad.container.classList.contains('sticky-notepad-minimized')
+        };
+      } catch (error) {
+        console.error('Error processing notepad for saving:', error);
+        // Return a minimal valid object if we can't get all the data
+        return {
+          id: notepad.id || 'unknown',
+          content: '',
+          position: { top: '20px', right: '20px', left: 'auto', bottom: 'auto' },
+          size: { width: '300px', height: '200px' },
+          isMinimized: false
+        };
+      }
+    });
+    
+    try {
+      chrome.storage.local.set({ notes: notesToSave }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('Error saving notes:', chrome.runtime.lastError);
+        } else {
+          console.log('All notes saved successfully');
+        }
+      });
+    } catch (error) {
+      console.error('Error accessing chrome.storage:', error);
+    }
+  } catch (error) {
+    console.error('Error in saveNotes function:', error);
+  }
 }
 
 // Load note content
