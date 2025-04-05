@@ -218,4 +218,4 @@ class StorageManager {
 }
 
 // Export the StorageManager class
-window.StorageManager = StorageManager;
+export { StorageManager };

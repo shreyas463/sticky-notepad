@@ -1,7 +1,7 @@
 // Update background script to use StorageManager
 
 // Import StorageManager
-importScripts('storage-manager.js');
+import { StorageManager } from './storage-manager.js';
 
 // Create storage manager instance
 const storageManager = new StorageManager();
