@@ -109,22 +109,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Handle tab updates to ensure notepad is injected on navigation
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url.startsWith('http')) {
-    // Check if notepad should be visible
-    storageManager.get('notepadSettings')
-      .then((result) => {
-        if (result.notepadSettings && result.notepadSettings.visible) {
-          // Send message to content script to ensure notepad is initialized
-          chrome.tabs.sendMessage(tabId, { 
-            action: 'initializeNotepad'
-          }).catch(() => {
-            // Content script might not be loaded yet, which is fine
-            console.log('Content script not ready yet');
-          });
-        }
-      })
-      .catch((error) => {
-        console.error('Error checking notepad visibility:', error);
-      });
+  try {
+    // Check if tab and tab.url exist and if the URL starts with http or https
+    if (changeInfo.status === 'complete' && tab && tab.url && (tab.url.startsWith('http') || tab.url.startsWith('https'))) {
+      // Check if notepad should be visible
+      storageManager.get('notepadSettings')
+        .then((result) => {
+          if (result.notepadSettings && result.notepadSettings.visible) {
+            // Send message to content script to ensure notepad is initialized
+            chrome.tabs.sendMessage(tabId, { 
+              action: 'initializeNotepad'
+            }).catch(() => {
+              // Content script might not be loaded yet, which is fine
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('Error getting notepad settings:', error);
+        });
+    }
+  } catch (error) {
+    console.error('Error in tab update handler:', error);
   }
 });

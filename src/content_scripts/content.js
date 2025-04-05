@@ -213,78 +213,39 @@ function createNewNote() {
 
 // Save all notes
 function saveNotes() {
-  const notes = notepads.map(notepad => {
-    return {
-      id: notepad.id,
-      content: notepad.textarea.value,
-      position: {
-        top: notepad.container.style.top,
-        right: notepad.container.style.right,
-        left: notepad.container.style.left,
-        bottom: notepad.container.style.bottom
-      },
-      size: {
-        width: notepad.container.style.width,
-        height: notepad.container.style.height
-      }
-    };
-  });
-  
-  chrome.storage.local.set({ notes: notes });
-}
-
-// Setup draggable functionality
-function setupDraggable(headerElement, containerElement) {
-  headerElement.addEventListener('mousedown', (e) => {
-    // Only handle drag from header area
-    isDragging = true;
-    dragOffsetX = e.clientX - containerElement.getBoundingClientRect().left;
-    dragOffsetY = e.clientY - containerElement.getBoundingClientRect().top;
-    
-    // Set as active note
-    activeNoteId = containerElement.id;
-    headerElement.style.cursor = 'grabbing';
-    
-    // Prevent text selection during drag
-    e.preventDefault();
-  });
-  
-  document.addEventListener('mousemove', (e) => {
-    if (isDragging) {
-      // Calculate new position
-      const newLeft = e.clientX - dragOffsetX;
-      const newTop = e.clientY - dragOffsetY;
-      
-      // Update position
-      containerElement.style.left = `${newLeft}px`;
-      containerElement.style.top = `${newTop}px`;
-      containerElement.style.right = 'auto';
-      containerElement.style.bottom = 'auto';
-      
-      // Update position object for the main notepad
-      if (containerElement === notepadContainer) {
-        notepadPosition = {
-          top: `${newTop}px`,
-          left: `${newLeft}px`,
-          right: 'auto',
-          bottom: 'auto'
-        };
+  try {
+    const notes = notepads.map(notepad => {
+      if (!notepad || !notepad.container || !notepad.textarea) {
+        console.error('Invalid notepad object in saveNotes:', notepad);
+        return null;
       }
       
-      // Save all notes
-      saveNotes();
-    }
-  });
-  
-  document.addEventListener('mouseup', () => {
-    if (isDragging) {
-      isDragging = false;
-      headerElement.style.cursor = 'grab';
-      
-      // Keep notepad in view
-      keepNotepadInView(containerElement);
-    }
-  });
+      return {
+        id: notepad.id,
+        content: notepad.textarea.value,
+        isMinimized: notepad.container.classList.contains('sticky-notepad-minimized'),
+        position: {
+          top: notepad.container.style.top,
+          right: notepad.container.style.right,
+          left: notepad.container.style.left,
+          bottom: notepad.container.style.bottom
+        },
+        size: {
+          width: notepad.container.style.width,
+          height: notepad.container.style.height
+        }
+      };
+    }).filter(note => note !== null);
+    
+    // Save to storage
+    chrome.storage.local.set({ notes: notes }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('Error saving notes:', chrome.runtime.lastError);
+      }
+    });
+  } catch (error) {
+    console.error('Error in saveNotes:', error);
+  }
 }
 
 // Setup resizable functionality
@@ -293,11 +254,8 @@ function setupResizable(resizeHandle, containerElement) {
     isResizing = true;
     resizeStartX = e.clientX;
     resizeStartY = e.clientY;
-    initialWidth = containerElement.offsetWidth;
-    initialHeight = containerElement.offsetHeight;
-    
-    // Set as active note
-    activeNoteId = containerElement.id;
+    initialWidth = parseInt(window.getComputedStyle(containerElement).width, 10);
+    initialHeight = parseInt(window.getComputedStyle(containerElement).height, 10);
     
     // Prevent text selection during resize
     e.preventDefault();
@@ -305,40 +263,110 @@ function setupResizable(resizeHandle, containerElement) {
   
   document.addEventListener('mousemove', (e) => {
     if (isResizing) {
-      const width = initialWidth + (e.clientX - resizeStartX);
-      const height = initialHeight + (e.clientY - resizeStartY);
+      // Calculate new size
+      const newWidth = initialWidth + (e.clientX - resizeStartX);
+      const newHeight = initialHeight + (e.clientY - resizeStartY);
       
-      // Set minimum size
+      // Apply minimum size constraints
       const minWidth = 200;
-      const minHeight = 150;
+      const minHeight = 100;
       
-      if (width >= minWidth) {
-        containerElement.style.width = width + 'px';
-      }
-      
-      if (height >= minHeight) {
-        containerElement.style.height = height + 'px';
-      }
-    }
-  });
-  
-  document.addEventListener('mouseup', () => {
-    if (isResizing) {
-      isResizing = false;
+      // Update size
+      containerElement.style.width = `${Math.max(newWidth, minWidth)}px`;
+      containerElement.style.height = `${Math.max(newHeight, minHeight)}px`;
       
       // Update size object for the main notepad
       if (containerElement === notepadContainer) {
         notepadSize = {
-          width: notepadContainer.style.width,
-          height: notepadContainer.style.height
+          width: containerElement.style.width,
+          height: containerElement.style.height
         };
-        saveNotepadPositionAndSize();
       }
       
       // Save all notes
       saveNotes();
     }
   });
+}
+
+// Setup draggable functionality
+function setupDraggable(headerElement, containerElement) {
+  try {
+    // Set default cursor for header
+    headerElement.style.cursor = 'grab';
+    
+    headerElement.addEventListener('mousedown', (e) => {
+      try {
+        // Only allow dragging from the header, not the buttons
+        if (e.target !== headerElement && !e.target.classList.contains('sticky-notepad-title')) {
+          return;
+        }
+        
+        isDragging = true;
+        dragOffsetX = e.clientX - containerElement.getBoundingClientRect().left;
+        dragOffsetY = e.clientY - containerElement.getBoundingClientRect().top;
+        
+        // Set as active note
+        activeNoteId = containerElement.id;
+        
+        // Change cursor style
+        headerElement.style.cursor = 'grabbing';
+        
+        // Prevent text selection during drag
+        e.preventDefault();
+      } catch (mousedownError) {
+        console.error('Error in mousedown event:', mousedownError);
+      }
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        try {
+          // Calculate new position
+          const newLeft = e.clientX - dragOffsetX;
+          const newTop = e.clientY - dragOffsetY;
+          
+          // Update position
+          containerElement.style.left = `${newLeft}px`;
+          containerElement.style.top = `${newTop}px`;
+          containerElement.style.right = 'auto';
+          containerElement.style.bottom = 'auto';
+          
+          // Update position object for the main notepad
+          if (containerElement === notepadContainer) {
+            notepadPosition = {
+              top: `${newTop}px`,
+              left: `${newLeft}px`,
+              right: 'auto',
+              bottom: 'auto'
+            };
+          }
+        } catch (mousemoveError) {
+          console.error('Error in mousemove event:', mousemoveError);
+          isDragging = false;
+        }
+      }
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        try {
+          isDragging = false;
+          headerElement.style.cursor = 'grab';
+          
+          // Keep notepad in view
+          keepNotepadInView(containerElement);
+          
+          // Save all notes with updated positions
+          saveNotes();
+        } catch (mouseupError) {
+          console.error('Error in mouseup event:', mouseupError);
+        }
+      }
+    });
+  } catch (setupError) {
+    console.error('Error setting up draggable functionality:', setupError);
+  }
 }
 
 // Keep notepad in view when window is resized
@@ -491,22 +519,37 @@ function toggleNotepadVisibility(visible) {
 
 // Toggle minimize state
 function toggleMinimize(e, noteId) {
-  // Find the notepad to minimize
-  const notepad = notepads.find(notepad => notepad.id === noteId);
-  if (!notepad) return;
-  
-  // Toggle minimized state
-  const isCurrentlyMinimized = notepad.container.classList.contains('sticky-notepad-minimized');
-  
-  if (isCurrentlyMinimized) {
-    notepad.container.classList.remove('sticky-notepad-minimized');
-  } else {
-    notepad.container.classList.add('sticky-notepad-minimized');
-  }
-  
-  // Update isMinimized for the main notepad
-  if (noteId === 'note-1') {
-    isMinimized = !isCurrentlyMinimized;
+  try {
+    // Find the notepad to minimize
+    const notepad = notepads.find(notepad => notepad.id === noteId);
+    if (!notepad || !notepad.container) {
+      console.error('Cannot find notepad or container for ID:', noteId);
+      return;
+    }
+    
+    // Toggle minimized state
+    const isCurrentlyMinimized = notepad.container.classList.contains('sticky-notepad-minimized');
+    console.log('Current minimized state for', noteId, ':', isCurrentlyMinimized);
+    
+    try {
+      if (isCurrentlyMinimized) {
+        notepad.container.classList.remove('sticky-notepad-minimized');
+      } else {
+        notepad.container.classList.add('sticky-notepad-minimized');
+      }
+      
+      // Update isMinimized for the main notepad
+      if (noteId === 'note-1') {
+        isMinimized = !isCurrentlyMinimized;
+      }
+      
+      // Save the state
+      saveNotes();
+    } catch (classError) {
+      console.error('Error toggling minimized class:', classError);
+    }
+  } catch (error) {
+    console.error('Error in toggleMinimize:', error);
   }
 }
 
