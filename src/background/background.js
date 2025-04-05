@@ -1,7 +1,37 @@
-// Update background script to use StorageManager
+// Background script for Sticky Notepad extension
 
-// Import StorageManager
-import { StorageManager } from './storage-manager.js';
+// Storage Manager implementation directly in the background script
+class StorageManager {
+  constructor() {
+    this.currentStorageType = 'local'; // Default storage type
+  }
+
+  // Get data from storage
+  get(keys) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get(keys, (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(result);
+        }
+      });
+    });
+  }
+
+  // Save data to storage
+  save(data) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+}
 
 // Create storage manager instance
 const storageManager = new StorageManager();
@@ -43,14 +73,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   
   if (message.action === 'changeStorageType') {
-    storageManager.changeStorageType(message.storageType)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch((error) => {
-        console.error('Error changing storage type:', error);
-        sendResponse({ error: error.message });
-      });
+    // We're only using local storage now, so just acknowledge the request
+    sendResponse({ success: true });
     return true;
   }
   
