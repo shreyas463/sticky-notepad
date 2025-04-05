@@ -34,6 +34,15 @@ if (document.readyState === 'loading') {
   initializeNotepad();
 }
 
+// Initialize the notepad
+function initializeNotepad() {
+  // Load settings first
+  loadSettings(() => {
+    // Load saved notes
+    loadNoteContent();
+  });
+}
+
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'updateSettings') {
@@ -52,34 +61,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep the message channel open for async response
 });
 
-// Initialize the notepad
-function initializeNotepad() {
-  // Load settings first
-  loadSettings(() => {
-    // Load saved notes
-    loadNotes();
-  });
-}
-
-// Load saved notes
-function loadNotes() {
-  chrome.storage.local.get('notes', (result) => {
-    if (result.notes) {
-      result.notes.forEach((note) => {
-        createNotepad(note.id, note.position);
-        const notepad = notepads.find((notepad) => notepad.id === note.id);
-        if (notepad) {
-          notepad.textarea.value = note.content;
-          notepad.container.style.width = note.size.width;
-          notepad.container.style.height = note.size.height;
-        }
-      });
-    } else {
-      // Create the first notepad if no notes are saved
-      createNotepad();
-    }
-  });
-}
+// This function has been moved to a more comprehensive version below
 
 // Create the notepad elements
 function createNotepad(id = 'note-1', position = { top: '20px', right: '20px', left: 'auto', bottom: 'auto' }) {
@@ -444,29 +426,50 @@ function loadSettings(callback) {
 }
 
 // Apply settings to notepad
-function applySettings() {
-  if (!notepadContainer) return;
-  
-  // Apply visibility
-  if (currentSettings.visible) {
-    notepadContainer.classList.remove('sticky-notepad-hidden');
+function applySettings(container, textarea) {
+  // If specific container and textarea are provided, apply settings to them
+  // Otherwise apply to all notepads
+  if (container && textarea) {
+    // Apply opacity
+    container.style.opacity = currentSettings.opacity;
+    
+    // Apply font size
+    textarea.style.fontSize = currentSettings.fontSize;
+    
+    // Apply theme
+    container.classList.remove(
+      'sticky-notepad-theme-light',
+      'sticky-notepad-theme-dark',
+      'sticky-notepad-theme-yellow'
+    );
+    container.classList.add(`sticky-notepad-theme-${currentSettings.theme}`);
   } else {
-    notepadContainer.classList.add('sticky-notepad-hidden');
+    // Apply to all notepads
+    notepads.forEach(notepad => {
+      // Apply opacity
+      notepad.container.style.opacity = currentSettings.opacity;
+      
+      // Apply font size
+      notepad.textarea.style.fontSize = currentSettings.fontSize;
+      
+      // Apply theme
+      notepad.container.classList.remove(
+        'sticky-notepad-theme-light',
+        'sticky-notepad-theme-dark',
+        'sticky-notepad-theme-yellow'
+      );
+      notepad.container.classList.add(`sticky-notepad-theme-${currentSettings.theme}`);
+    });
+    
+    // Apply visibility only to the main notepad
+    if (notepadContainer) {
+      if (currentSettings.visible) {
+        notepadContainer.classList.remove('sticky-notepad-hidden');
+      } else {
+        notepadContainer.classList.add('sticky-notepad-hidden');
+      }
+    }
   }
-  
-  // Apply opacity
-  notepadContainer.style.opacity = currentSettings.opacity;
-  
-  // Apply font size
-  notepadTextarea.style.fontSize = currentSettings.fontSize;
-  
-  // Apply theme
-  notepadContainer.classList.remove(
-    'sticky-notepad-theme-light',
-    'sticky-notepad-theme-dark',
-    'sticky-notepad-theme-yellow'
-  );
-  notepadContainer.classList.add(`sticky-notepad-theme-${currentSettings.theme}`);
 }
 
 // Update notepad settings
@@ -482,65 +485,150 @@ function toggleNotepadVisibility(visible) {
 }
 
 // Toggle minimize state
-function toggleMinimize() {
-  isMinimized = !isMinimized;
+function toggleMinimize(e, noteId) {
+  // Find the notepad to minimize
+  const notepad = notepads.find(notepad => notepad.id === noteId);
+  if (!notepad) return;
   
-  if (isMinimized) {
-    notepadContainer.classList.add('sticky-notepad-minimized');
+  // Toggle minimized state
+  const isCurrentlyMinimized = notepad.container.classList.contains('sticky-notepad-minimized');
+  
+  if (isCurrentlyMinimized) {
+    notepad.container.classList.remove('sticky-notepad-minimized');
   } else {
-    notepadContainer.classList.remove('sticky-notepad-minimized');
+    notepad.container.classList.add('sticky-notepad-minimized');
+  }
+  
+  // Update isMinimized for the main notepad
+  if (noteId === 'note-1') {
+    isMinimized = !isCurrentlyMinimized;
   }
 }
 
 // Hide notepad
-function hideNotepad() {
-  currentSettings.visible = false;
-  applySettings();
+function hideNotepad(e, noteId) {
+  console.log('Hiding notepad with ID:', noteId);
   
-  // Update settings in storage
-  chrome.storage.local.get('notepadSettings', (result) => {
-    const settings = result.notepadSettings || {};
-    settings.visible = false;
-    chrome.storage.local.set({ notepadSettings: settings });
-  });
+  // If it's the main notepad, update settings
+  if (noteId === 'note-1') {
+    currentSettings.visible = false;
+    
+    // Apply settings to all notepads
+    applySettings();
+    
+    // Update settings in storage
+    chrome.storage.local.get('notepadSettings', (result) => {
+      const settings = result.notepadSettings || {};
+      settings.visible = false;
+      chrome.storage.local.set({ notepadSettings: settings });
+    });
+  } else {
+    // For additional notepads, just remove them from the DOM and the notepads array
+    const notepadIndex = notepads.findIndex(notepad => notepad.id === noteId);
+    console.log('Found notepad at index:', notepadIndex);
+    
+    if (notepadIndex !== -1) {
+      const notepadToRemove = notepads[notepadIndex];
+      // Remove from DOM
+      if (notepadToRemove.container && document.body.contains(notepadToRemove.container)) {
+        document.body.removeChild(notepadToRemove.container);
+        console.log('Removed notepad from DOM');
+      }
+      
+      // Remove from array
+      notepads.splice(notepadIndex, 1);
+      console.log('Removed notepad from array, remaining notepads:', notepads.length);
+      
+      // Save notes to update storage
+      saveNotes();
+    }
+  }
 }
 
 // Save note content
 function saveNoteContent() {
-  // Use the appropriate storage based on settings
-  if (currentSettings.storageType === 'sync') {
-    chrome.storage.sync.set({ noteContent: noteContent });
-  } else {
-    chrome.storage.local.set({ noteContent: noteContent });
-  }
+  saveNotes();
+}
+
+// Save all notes
+function saveNotes() {
+  if (notepads.length === 0) return;
+  
+  const notesToSave = notepads.map(notepad => {
+    const rect = notepad.container.getBoundingClientRect();
+    return {
+      id: notepad.id,
+      content: notepad.textarea.value,
+      position: {
+        top: notepad.container.style.top,
+        right: notepad.container.style.right,
+        left: notepad.container.style.left,
+        bottom: notepad.container.style.bottom
+      },
+      size: {
+        width: notepad.container.style.width || rect.width + 'px',
+        height: notepad.container.style.height || rect.height + 'px'
+      },
+      isMinimized: notepad.container.classList.contains('sticky-notepad-minimized')
+    };
+  });
+  
+  chrome.storage.local.set({ notes: notesToSave }, () => {
+    console.log('All notes saved');
+  });
 }
 
 // Load note content
 function loadNoteContent() {
-  // Try to load from both storage types, prioritize the current setting
-  if (currentSettings.storageType === 'sync') {
-    chrome.storage.sync.get('noteContent', (result) => {
-      if (result.noteContent) {
-        noteContent = result.noteContent;
-        if (notepadTextarea) notepadTextarea.value = noteContent;
-      } else {
-        // Fallback to local if not found in sync
-        chrome.storage.local.get('noteContent', (localResult) => {
-          if (localResult.noteContent) {
-            noteContent = localResult.noteContent;
-            if (notepadTextarea) notepadTextarea.value = noteContent;
+  // Load all saved notes
+  chrome.storage.local.get(['notes', 'noteContent'], (result) => {
+    // Handle new multi-note format
+    if (result.notes && Array.isArray(result.notes) && result.notes.length > 0) {
+      // First, create the main notepad if it doesn't exist
+      if (!notepadContainer) {
+        const mainNote = result.notes.find(note => note.id === 'note-1');
+        if (mainNote) {
+          createNotepad('note-1', mainNote.position);
+          if (notepadTextarea && mainNote.content) {
+            notepadTextarea.value = mainNote.content;
           }
-        });
+          if (mainNote.isMinimized) {
+            notepadContainer.classList.add('sticky-notepad-minimized');
+            isMinimized = true;
+          }
+          if (mainNote.size) {
+            notepadContainer.style.width = mainNote.size.width;
+            notepadContainer.style.height = mainNote.size.height;
+          }
+        } else {
+          // If no main note found, create default
+          createNotepad();
+        }
       }
-    });
-  } else {
-    chrome.storage.local.get('noteContent', (result) => {
-      if (result.noteContent) {
-        noteContent = result.noteContent;
-        if (notepadTextarea) notepadTextarea.value = noteContent;
-      }
-    });
-  }
+      
+      // Then create all additional notes
+      result.notes.forEach(note => {
+        if (note.id !== 'note-1') {
+          const { container, textarea } = createNotepad(note.id, note.position);
+          if (textarea && note.content) {
+            textarea.value = note.content;
+          }
+          if (note.isMinimized) {
+            container.classList.add('sticky-notepad-minimized');
+          }
+          if (note.size) {
+            container.style.width = note.size.width;
+            container.style.height = note.size.height;
+          }
+        }
+      });
+    } 
+    // Handle legacy single-note format
+    else if (result.noteContent) {
+      noteContent = result.noteContent;
+      if (notepadTextarea) notepadTextarea.value = noteContent;
+    }
+  });
 }
 
 // Save notepad position and size
