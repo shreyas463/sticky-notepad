@@ -1,0 +1,18 @@
+# Node modules
+node_modules/
+
+# Distribution files
+dist/
+
+# macOS system files
+.DS_Store
+
+# IDE files
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Environment variables
+.env
